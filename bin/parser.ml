@@ -20,16 +20,13 @@ let predicate_parser (pred : char -> bool) : char parser =
 let anychar_parser = predicate_parser (fun _ -> true)
 let digits = "0123456789"
 let whitespaces = " \n\r\t"
-(* let delimiters = whitespaces ^ "()\";," *)
+let delimiters = whitespaces ^ "()\";,"
+let first_in_symbol = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 let charset_parser (charset : string) =
   predicate_parser (fun c -> String.contains charset c)
 
 let char_parser (c : char) = predicate_parser (fun c' -> c' == c)
-
-(* let uncharset_parser (charset : string) = *)
-(*   predicate_parser (fun c -> not @@ String.contains charset c) *)
-
 let return (x : 'a) : 'a parser = fun st -> Success (x, st)
 let error (msg : string) : 'a parser = fun st -> Failure msg
 
@@ -40,6 +37,12 @@ let bind (m : 'a parser) (f : 'a -> 'b parser) : 'b parser =
   | Success (x, st') -> f x st'
 
 let ( let* ) = bind
+
+let peek (m : 'a parser) : 'a parser =
+ fun st ->
+  match m st with
+  | Failure reason -> Failure reason
+  | Success (x, _) -> Success (x, st)
 
 let rec str_parser (str : string) : string parser =
   if String.length str = 0 then
@@ -83,39 +86,17 @@ let whitespace_parser () : unit parser =
   in
   loop ()
 
-let rec fastpow (x : int) (p : int) : int =
-  if p = 0 then
-    1
-  else if p mod 2 = 1 then
-    x * fastpow x (p - 1)
-  else
-    let y = fastpow x (p / 2) in
-    y * y
-
-let int_parser (st : stream) : int parse_result =
-  let digit_parser = charset_parser digits in
-
+let int_parser () : int parser =
   let int_of_char c = Char.code c - Char.code '0' in
-  let add_digit (d : char) (num : int) (p10 : int) =
-    num + (int_of_char d * fastpow 10 p10)
-  in
+  let* _ = peek @@ charset_parser digits in
 
-  let rec int_helper (st : stream) : (int * int) parse_result =
-    match digit_parser st with
-    | Failure _ -> Success ((0, 0), st)
-    | Success (d, st') -> (
-        match int_helper st' with
-        | Failure reason -> Failure reason
-        | Success ((num, p10), st'') ->
-            Success ((add_digit d num p10, p10 + 1), st''))
+  let rec loop (acc : int) : int parser =
+    alt
+      (let* d = charset_parser digits in
+       loop ((acc * 10) + int_of_char d))
+      (return acc)
   in
-
-  match digit_parser st with
-  | Failure reason -> Failure reason
-  | Success (d, st') -> (
-      match int_helper st' with
-      | Failure _ -> Failure "unreachable"
-      | Success ((num, p10), st'') -> Success (add_digit d num p10, st''))
+  loop 0
 
 let bool_parser () : bool parser =
   alt
@@ -136,6 +117,37 @@ let string_parser () : string parser =
   in
   loop ""
 
+let symbol_parser () : symbol parser =
+  let* first = charset_parser first_in_symbol in
+
+  let rec loop (acc : string) : string parser =
+    alt
+      (let* _ = peek @@ charset_parser delimiters in
+       return acc)
+      (let* c = anychar_parser in
+       loop (acc ^ String.make 1 c))
+  in
+  loop @@ "\x00" ^ String.make 1 first
+
+let float_parser () : float parser =
+  let rec loop1 (acc : string) : string parser =
+    alt
+      (let* _ = char_parser '.' in
+       return acc)
+      (let* d = charset_parser digits in
+       loop1 (acc ^ String.make 1 d))
+  in
+  let rec loop2 (acc : string) : string parser =
+    alt
+      (let* d = charset_parser digits in
+       loop2 (acc ^ String.make 1 d))
+      (return acc)
+  in
+
+  let* first = loop1 "" in
+  let* second = loop2 "" in
+  return @@ Float.of_string (first ^ "." ^ second)
+
 let rec list_parser () : ast list parser =
   let* _ = char_parser '(' in
   let rec loop (acc : ast list) : ast list parser =
@@ -152,13 +164,19 @@ let rec list_parser () : ast list parser =
 and ast_parser () : ast parser =
   let* _ = whitespace_parser () in
   alt
-    (let* i = int_parser in
-     return @@ Int i)
+    (let* f = float_parser () in
+     return @@ Float f)
+  @@ alt
+       (let* i = int_parser () in
+        return @@ Int i)
   @@ alt
        (let* b = bool_parser () in
         return @@ Bool b)
   @@ alt
        (let* s = string_parser () in
         return @@ Str s)
+  @@ alt
        (let* l = list_parser () in
         return @@ List l)
+       (let* s = symbol_parser () in
+        return @@ Symbol s)
