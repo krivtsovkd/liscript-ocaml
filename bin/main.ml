@@ -1,16 +1,4 @@
-type symbol = string
-
-let make_symbol str = "\x00" ^ str
-let is_symbol value = String.length value > 0 && value.[0] = '\x00'
-let symbol_name symbol = String.sub symbol 1 (String.length symbol - 1)
-
-type ast =
-  | Int of int
-  | Float of float
-  | Bool of bool
-  | Str of string
-  | List of ast list
-  | Symbol of symbol
+open Ast
 
 type read_error = CantRead | UnknownCommand
 
@@ -34,22 +22,7 @@ let read () =
         | _ -> Error UnknownCommand)
 
 let evaluate value = Str value
-
-let rec show value =
-  match value with
-  | Int i -> Int.to_string i
-  | Float f -> Float.to_string f
-  | Bool b -> ( match b with true -> "true" | false -> "false")
-  | Str s -> "\"" ^ s ^ "\""
-  | Symbol s -> symbol_name s
-  | List l ->
-      let rec aux acc lst =
-        match lst with
-        | [] -> acc
-        | hd :: [] -> acc ^ show hd
-        | hd :: tl -> aux (acc ^ show hd ^ " ") tl
-      in
-      "(" ^ aux "" l ^ ")"
+let explod str = List.init (String.length str) (String.get str)
 
 let rec main_loop () =
   print_string "\n>>> ";
@@ -57,11 +30,14 @@ let rec main_loop () =
 
   let _ =
     match read () with
-    | Ok res -> evaluate res |> show |> print_endline
     | Error err -> (
         match err with
         | CantRead -> exit 0
         | UnknownCommand -> print_endline "Unknown command")
+    | Ok res -> (
+        match explod res |> Parser.ast_parser () with
+        | Failure reason -> print_endline reason
+        | Success (value, _) -> show value |> print_endline)
   in
 
   main_loop ()
@@ -72,7 +48,12 @@ let () = main_loop ()
 (*   print_endline @@ show *)
 (*   @@ List *)
 (*        [ *)
-(*          List [ Int 1; Int 2; Symbol (symbol "iamasymbol") ]; *)
+(*          List [ Int 1; Int 2; Symbol (make_symbol "iamasymbol") ]; *)
 (*          Str "mraow"; *)
 (*          Bool true; *)
 (*        ] *)
+
+(* let () = *)
+(*   match (Parser.ast_parser ()) (explod "(\"string\" ;fuck \n (()(123)))") with *)
+(*   | Failure reason -> print_endline reason *)
+(*   | Success (value, _) -> print_endline (Ast.show value) *)
