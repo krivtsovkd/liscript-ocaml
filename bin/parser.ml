@@ -156,10 +156,10 @@ let rec list_parser () : ast list parser =
       (let* _ = char_parser ')' in
        return acc)
       (let* c = ast_parser () in
-       loop (acc @ [ c ]))
-    (* TODO faster list thingy *)
+       loop (c :: acc))
   in
-  loop []
+  let* l = loop [] in
+  return @@ List.rev l
 
 and ast_parser () : ast parser =
   let* _ = whitespace_parser () in

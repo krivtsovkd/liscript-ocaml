@@ -11,12 +11,14 @@ let read () =
       else
         match line.[1] with
         | 'l' ->
-            (* TODO check theres a filename and the file opens goodly *)
             let file_content =
               let drop_first count str =
                 String.sub str count (String.length str - count)
               in
-              In_channel.with_open_text (drop_first 3 line) In_channel.input_all
+              try
+                In_channel.with_open_text (drop_first 3 line)
+                  In_channel.input_all
+              with Sys_error _ -> "File_not_found " (* TODO *)
             in
             Ok file_content
         | _ -> Error UnknownCommand)
