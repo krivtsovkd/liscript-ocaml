@@ -23,8 +23,78 @@ let read () =
             Ok file_content
         | _ -> Error UnknownCommand)
 
-let evaluate value = Str value
 let explod str = List.init (String.length str) (String.get str)
+
+let rec pre_nth_line_start (str : string) (n : int) : int =
+  if n = 0 then
+    -1
+  else
+    let lines = String.split_on_char '\n' str in
+    let line_sizes = List.map (fun s -> 1 + String.length s) lines in
+    let len_sum = List.take n line_sizes |> List.fold_left ( + ) 0 in
+    len_sum - 1
+
+let get_line (str : string) (linenum : int) : string =
+  let line_start = 1 + pre_nth_line_start str linenum in
+  let line_end = pre_nth_line_start str (linenum + 1) in
+  String.sub str line_start (line_end - line_start)
+
+let offset_to_linenum (str : string) (offset : int) : int =
+  let prefix = String.sub str 0 offset in
+  List.length @@ List.filter (fun c -> c = '\n') @@ explod prefix
+
+let print_error (program : string) (msg : string) ((loc_start, loc_end) : loc) =
+  let loc_end = loc_end - 1 in
+
+  let start_linenum = offset_to_linenum program loc_start in
+  let start_line = get_line program start_linenum in
+  let start_line_offset = pre_nth_line_start program start_linenum in
+  let start_column = loc_start - start_line_offset - 1 in
+  let start_str = String.init start_column (fun _ -> ' ') in
+
+  print_endline @@ "\x1b[31mError\x1b[39m on line "
+  ^ string_of_int (start_linenum + 1)
+  ^ ":";
+  print_endline msg;
+  print_endline start_line;
+
+  print_string "\x1b[31m";
+
+  let end_linenum = offset_to_linenum program loc_end in
+  let end_line_offset = pre_nth_line_start program end_linenum in
+  let end_column = loc_end - end_line_offset - 1 in
+  if end_linenum = start_linenum then (
+    if start_column = end_column then
+      let _ = print_endline @@ start_str ^ "^" in
+      print_string "\x1b[39m"
+    else
+      let tildes = String.init (end_column - start_column - 1) (fun _ -> '~') in
+      print_endline @@ start_str ^ "^" ^ tildes ^ "^";
+      print_string "\x1b[39m"
+  ) else
+    let end_line = get_line program end_linenum in
+    let line_rest = String.length start_line - start_column - 1 in
+    let tildes1 = String.init line_rest (fun _ -> '~') in
+    let tildes2 = String.init end_column (fun _ -> '~') in
+
+    print_endline @@ start_str ^ "^" ^ tildes1 ^ "\n";
+    print_string "\x1b[39m";
+    print_endline end_line;
+    print_string "\x1b[31m";
+    print_endline @@ tildes2 ^ "^";
+    print_string "\x1b[39m"
+
+let rec process (orig_program : string) ((st, lc) : Parser.stream) =
+  match Parser.parse (st, lc) with
+  | Failure (msg, loc_start, loc_end) ->
+      print_error orig_program msg (loc_start, loc_end)
+  | Success (value, rest_stream) -> (
+      (try Eval.eval value |> show_ast |> print_endline
+       with Eval.EvalError (msg, lc) -> print_error orig_program msg lc);
+
+      match rest_stream with
+      | [], _ | [ '\n' ], _ -> ()
+      | st -> process orig_program st)
 
 let rec main_loop () =
   print_string "\n>>> ";
@@ -36,10 +106,7 @@ let rec main_loop () =
         match err with
         | CantRead -> exit 0
         | UnknownCommand -> print_endline "Unknown command")
-    | Ok res -> (
-        match explod res |> Parser.ast_parser () with
-        | Failure reason -> print_endline reason
-        | Success (value, _) -> show value |> print_endline)
+    | Ok res -> process res (explod res, 0)
   in
 
   main_loop ()
