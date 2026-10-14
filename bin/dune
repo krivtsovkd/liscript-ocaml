@@ -1,4 +1,4 @@
 (executable
  (public_name yulisp)
  (name main)
- (libraries yulisp))
+ (libraries))
