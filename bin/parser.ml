@@ -181,6 +181,15 @@ let rec list_parser () : ast list parser =
   let* l = loop [] in
   return @@ List.rev l
 
+and quote_parser () : ast parser =
+  let* init_loc = get_loc () in
+  let* _ = char_parser '\'' in
+  let* term = ast_parser () in
+  let* final_loc = get_loc () in
+  return
+    ( List [ (Sf Enums.Quote, (init_loc, init_loc + 1)); term ],
+      (init_loc, final_loc) )
+
 and ast_parser () : ast parser =
   let* _ = whitespace_parser () in
   let* init_loc = get_loc () in
@@ -214,6 +223,7 @@ and ast_parser () : ast parser =
   @@ alt
        (let* l = list_parser () in
         ast_return (List l))
+  @@ alt (quote_parser ())
   @@ alt
        (let* s = symbol_parser () in
         ast_return (Symbol s))

@@ -104,24 +104,31 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) : ast =
       let arg2 = eval @@ List.hd @@ List.tl tail in
       match arg2 with
       | List tl, _ -> (List (hd :: tl), lc)
-      | _, lc2 -> raise @@ EvalError ("Expected cons list", lc2))
+      | _, lc2 ->
+          raise @@ EvalError ("Expected cons list, got " ^ show_ast arg2, lc2))
   | Car -> (
       match eval @@ List.hd tail with
       | List l, lc2 -> (
           match l with
           | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
           | (x, _) :: _ -> (x, lc))
-      | _, lc2 -> raise @@ EvalError ("Expected cons list", lc2))
+      | res, lc2 ->
+          raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2))
   | Cdr -> (
       match eval @@ List.hd tail with
       | List l, lc2 -> (
           match l with
           | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
           | (_, _) :: xs -> (List xs, lc))
-      | _, lc2 -> raise @@ EvalError ("Expected cons list", lc2))
+      | res, lc2 ->
+          raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2))
   | Cond -> (
       if List.length tail mod 2 = 0 then
-        raise @@ EvalError ("Expected an odd number of arguments", lc)
+        raise
+        @@ EvalError
+             ( "Expected an odd number of arguments, got "
+               ^ string_of_int (List.length tail),
+               lc )
       else
         match tail with
         | [] -> raise Unreachable
@@ -133,7 +140,9 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) : ast =
                   eval y
                 else
                   handle_sf s xs lc2
-            | _, lc2 -> raise @@ EvalError ("Expected bool", lc2)))
+            | res, lc2 ->
+                raise @@ EvalError ("Expected bool, got " ^ show_data res, lc2))
+      )
   | Print ->
       let reprs = List.map (fun x -> x |> eval |> repr) tail in
       print_endline @@ String.concat " " reprs;
