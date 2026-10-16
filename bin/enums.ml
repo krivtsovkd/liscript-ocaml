@@ -19,6 +19,8 @@ type sf =
   | Eval
   | Symbol
   | Do
+  | Def
+  | Set
 
 let sf_str_list =
   [
@@ -33,6 +35,8 @@ let sf_str_list =
     (Read, "read");
     (Symbol, "symbol");
     (Do, "do");
+    (Def, "def");
+    (Set, "set!");
   ]
 
 let sf_arg_count (s : sf) : int option =
@@ -44,7 +48,7 @@ let sf_arg_count (s : sf) : int option =
   | Cdr -> Some 1
   | Eval -> Some 1
   | Symbol -> Some 1
-  | _ -> None (* TODO *)
+  | _ -> None
 
 exception Unreachable
 

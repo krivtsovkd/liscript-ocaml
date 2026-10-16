@@ -1,13 +1,20 @@
 open Ast
 
-type read_error = CantRead | UnknownCommand
+let check_a (env : Eval.Env.t) =
+  Out_channel.output_string stderr
+  @@ string_of_bool
+  @@ Eval.Env.StringMap.exists (fun s _ -> "a" = Ast.symbol_name s) env;
+  flush stderr
 
-let read () =
+type read_error = CantRead | UnknownCommand
+type read_result = ReplStr of string | FileStr of string | Error of read_error
+
+let read () : read_result =
   match In_channel.input_line stdin with
   | None -> Error CantRead
   | Some line -> (
       if line.[0] <> ':' then
-        Ok line
+        ReplStr line
       else
         match line.[1] with
         | 'l' ->
@@ -20,7 +27,7 @@ let read () =
                   In_channel.input_all
               with Sys_error _ -> "File_not_found " (* TODO *)
             in
-            Ok file_content
+            FileStr file_content
         | _ -> Error UnknownCommand)
 
 let explod str = List.init (String.length str) (String.get str)
@@ -84,34 +91,56 @@ let print_error (program : string) (msg : string) ((loc_start, loc_end) : loc) =
     print_endline @@ tildes2 ^ "^";
     print_string "\x1b[39m"
 
-let rec process (orig_program : string) ((st, lc) : Parser.stream) =
+let cond_print_endline (cond : bool) (str : string) =
+  if cond then
+    print_endline str
+  else
+    ()
+
+let rec process (orig_program : string) ((st, lc) : Parser.stream)
+    (is_file : bool) (env : Eval.Env.t) : Eval.Env.t =
   match Parser.parse (st, lc) with
   | Failure (msg, loc_start, loc_end) ->
-      print_error orig_program msg (loc_start, loc_end)
+      print_error orig_program msg (loc_start, loc_end);
+      env
   | Success (value, rest_stream) -> (
-      (try Eval.eval value |> show_ast |> print_endline
-       with Eval.EvalError (msg, lc) -> print_error orig_program msg lc);
+      let env, out =
+        try
+          let res, env = Eval.eval env value in
+          let res_str = show_ast res in
+          cond_print_endline (not is_file) res_str;
+          (env, res_str)
+        with Eval.EvalError (msg, lc) ->
+          print_error orig_program msg lc;
+          (env, "")
+      in
 
       match rest_stream with
-      | [], _ | [ '\n' ], _ -> ()
-      | st -> process orig_program st)
+      | [], _ | [ '\n' ], _ ->
+          cond_print_endline (is_file && out <> "") out;
+          env
+      | st -> process orig_program st is_file env)
 
-let rec main_loop () =
+let rec main_loop (env : Eval.Env.t) : Eval.Env.t =
   print_string "\n>>> ";
   flush stdout;
 
-  let _ =
+  let env =
     match read () with
-    | Error err -> (
-        match err with
+    | Error err ->
+        (match err with
         | CantRead -> exit 0
-        | UnknownCommand -> print_endline "Unknown command")
-    | Ok res -> process res (explod res, 0)
+        | UnknownCommand -> print_endline "Unknown command");
+        env
+    | ReplStr res -> process res (explod res, 0) false env
+    | FileStr res -> process res (explod res, 0) true env
   in
 
-  main_loop ()
+  main_loop env
 
-let () = main_loop ()
+let () =
+  let _ = main_loop Eval.Env.StringMap.empty in
+  ()
 
 (* let () = *)
 (*   print_endline @@ show *)

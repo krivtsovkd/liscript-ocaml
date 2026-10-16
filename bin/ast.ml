@@ -21,7 +21,7 @@ type ast_data =
 and loc = int * int
 and ast = ast_data * loc
 
-let rec show_ast ((value, _) : ast) : string =
+let rec show_data (value : ast_data) : string =
   match value with
   | Int i -> Int.to_string i
   | Float f -> Float.to_string f
@@ -40,8 +40,7 @@ let rec show_ast ((value, _) : ast) : string =
       in
       "(" ^ aux "" l ^ ")"
 
-(* TODO *)
-let rec show_data (value : ast_data) : string = show_ast (value, (0, 0))
+and show_ast ((value, _) : ast) : string = show_data value
 
 let show_type ((value, _) : ast) : string =
   match value with
