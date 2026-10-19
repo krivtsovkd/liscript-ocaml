@@ -266,15 +266,13 @@ and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     match (lambda_args, passed_values) with
     | [], [] -> (fst @@ eval lam_env l.body, orig_env)
     | lambda_args, [] ->
-        (* TODO FIX DAMBDA *)
-        ( ( Lambda
-              {
-                args = lambda_args;
-                body = l.body;
-                get_env = (fun _ -> lam_env);
-              },
-            lc ),
-          orig_env )
+        let make_f =
+          if is_dambda l then
+            make_dambda
+          else
+            make_lambda
+        in
+        ((Lambda (make_f lambda_args l.body lam_env), lc), orig_env)
     | [], passed_values ->
         let rec eval_list_loop (acc : ast list) (vals : ast list) orig_env :
             ast list * envt =

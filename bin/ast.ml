@@ -51,11 +51,15 @@ let env_set (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
 let make_lambda (args : ast list) (body : ast) (env : envt) : lambda =
   { args; body; get_env = (fun _ -> env) }
 
+let id_env (env : envt) : envt = env
+
 let make_dambda (args : ast list) (body : ast) : lambda =
-  { args; body; get_env = (fun env -> env) }
+  { args; body; get_env = id_env }
 
 let make_dambda (args : ast list) (body : ast) (_ : envt) : lambda =
-  { args; body; get_env = (fun env -> env) }
+  { args; body; get_env = id_env }
+
+let is_dambda (l : lambda) : bool = l.get_env == id_env
 
 let rec show_data (value : ast_data) : string =
   match value with
