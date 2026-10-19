@@ -4,26 +4,6 @@ open Ast
 let explod str = List.init (String.length str) (String.get str)
 
 exception Unreachable
-exception EvalError of (string * loc)
-
-module Env = struct
-  module StringMap = Map.Make (String)
-
-  type t = ast_data StringMap.t
-
-  let def (env : t) (sym : symbol) (value : ast_data) : t =
-    StringMap.add (symbol_name sym) value env
-
-  let get (env : t) ((sym, lc) : ast) : ast_data =
-    match sym with
-    | Symbol s -> (
-        try StringMap.find (symbol_name s) env
-        with Not_found -> raise @@ EvalError ("Undefined variable", lc))
-    | _ -> raise @@ EvalError ("Expected symbol", lc)
-
-  let set (env : t) (sym : symbol) (value : ast_data) : t =
-    StringMap.add (symbol_name sym) value env
-end
 
 let repr (v : ast_data) : string = match v with Str s -> s | _ -> show_data v
 let repr ((v, _) : ast) : string = repr v
@@ -89,12 +69,18 @@ let assert_length (args : ast list) (len : int) (lc : loc) =
            @@ List.length args,
            lc )
 
-let rec fold_op (op : Enums.op) (values : ast list) (lc : loc) (env : Env.t) :
-    ast * Env.t =
+let rec fold_op (op : Enums.op) (values : ast list) (lc : loc) (env : envt) :
+    ast * envt =
   match values with
   | [] -> raise @@ EvalError ("Operation on empty list", lc)
   | x :: xs ->
-      let rec loop (acc : ast) (env : Env.t) (rest : ast list) : ast * Env.t =
+      let x =
+        if op = Enums.Concat then
+          (Str (repr x), snd x)
+        else
+          x
+      in
+      let rec loop (acc : ast) (env : envt) (rest : ast list) : ast * envt =
         match rest with
         | [] -> (acc, env)
         | x :: xs ->
@@ -104,9 +90,9 @@ let rec fold_op (op : Enums.op) (values : ast list) (lc : loc) (env : Env.t) :
       let x, env = eval env x in
       loop x env xs
 
-and fold_pr (p : Enums.pr) (values : ast list) (lc : loc) (env : Env.t) :
-    ast * Env.t =
-  let rec loop (vals : ast list) (env : Env.t) : ast_data * Env.t =
+and fold_pr (p : Enums.pr) (values : ast list) (lc : loc) (env : envt) :
+    ast * envt =
+  let rec loop (vals : ast list) (env : envt) : ast_data * envt =
     match vals with
     | [] | [ _ ] -> (Bool true, env)
     | x :: y :: xs ->
@@ -123,8 +109,8 @@ and fold_pr (p : Enums.pr) (values : ast list) (lc : loc) (env : Env.t) :
       let res, env = loop (x :: xs) env in
       ((res, lc), env)
 
-and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
-    ast * Env.t =
+and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
+    ast * envt =
   let _ =
     match Enums.sf_arg_count s with
     | Some cnt -> assert_length tail cnt lc
@@ -144,23 +130,31 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
       | _, lc2 ->
           raise @@ EvalError ("Expected cons list, got " ^ show_ast arg2, lc2))
   | Car -> (
-      let lst, env = eval env @@ List.hd tail in
-      match lst with
+      let arg, env = eval env @@ List.hd tail in
+      match arg with
       | List l, lc2 -> (
           match l with
           | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
           | (x, _) :: _ -> ((x, lc), env))
       | res, lc2 ->
-          raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2))
+          if Settings.implicit_list_interface then
+            (arg, env)
+          else
+            raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2)
+      )
   | Cdr -> (
-      let lst, env = eval env @@ List.hd tail in
-      match lst with
+      let arg, env = eval env @@ List.hd tail in
+      match arg with
       | List l, lc2 -> (
           match l with
           | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
           | (_, _) :: xs -> ((List xs, lc), env))
       | res, lc2 ->
-          raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2))
+          if Settings.implicit_list_interface then
+            ((List [], lc), env)
+          else
+            raise @@ EvalError ("Expected cons list, got " ^ show_data res, lc2)
+      )
   | Cond -> (
       if List.length tail mod 2 = 0 then
         raise
@@ -184,8 +178,8 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
                 raise @@ EvalError ("Expected bool, got " ^ show_data res, lc2))
       )
   | Print ->
-      let rec loop (acc : string list) (rest : ast list) (env : Env.t) :
-          string list * Env.t =
+      let rec loop (acc : string list) (rest : ast list) (env : envt) :
+          string list * envt =
         match rest with
         | [] -> (acc, env)
         | x :: xs ->
@@ -197,8 +191,8 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
       ((List [], lc), env)
   | Read -> (
       (* TODO not copypaste print *)
-      let rec loop (acc : string list) (rest : ast list) (env : Env.t) :
-          string list * Env.t =
+      let rec loop (acc : string list) (rest : ast list) (env : envt) :
+          string list * envt =
         match rest with
         | [] -> (acc, env)
         | x :: xs ->
@@ -232,9 +226,9 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
   | Def | Set -> (
       let f =
         if s = Def then
-          Env.def
+          env_def
         else
-          Env.set
+          env_set
       in
       match tail with
       | [] -> ((List [], lc), env)
@@ -252,8 +246,57 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : Env.t) :
               handle_sf s xs lc env
           | _, lc' ->
               raise @@ EvalError ("Expected symbol, got " ^ show_ast sym, lc')))
+  | Lambda | Dambda -> (
+      let make_f =
+        if s = Lambda then
+          make_lambda
+        else
+          make_dambda
+      in
+      let args, body = (List.hd tail, List.nth tail 1) in
+      match args with
+      | List args, _ -> ((Lambda (make_f args body env), lc), env)
+      | _, loc_args ->
+          raise @@ EvalError ("Expected cons list, got " ^ repr args, loc_args))
 
-and eval_list (l : ast list) (lc : loc) (env : Env.t) : ast * Env.t =
+and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
+    : ast * envt =
+  let rec loop (lambda_args : ast list) (passed_values : ast list)
+      (lam_env : envt) (orig_env : envt) : ast * envt =
+    match (lambda_args, passed_values) with
+    | [], [] -> (fst @@ eval lam_env l.body, orig_env)
+    | lambda_args, [] ->
+        (* TODO BROKEN !!! *)
+        ( (Lambda { args = lambda_args; body = l.body; get_env = l.get_env }, lc),
+          orig_env )
+    | [], passed_values ->
+        let rec eval_list_loop (acc : ast list) (vals : ast list) orig_env :
+            ast list * envt =
+          match vals with
+          | [] -> (acc, orig_env)
+          | v :: vs ->
+              let v, orig_env = eval orig_env v in
+              (v :: acc, orig_env)
+        in
+        let evaled_values, orig_env =
+          eval_list_loop [] passed_values orig_env
+        in
+        let lam_env =
+          env_def lam_env (make_symbol "rest-args")
+            (List (List.rev evaled_values))
+        in
+        (fst @@ eval lam_env l.body, orig_env)
+    | (Symbol sym, _) :: args, value :: values ->
+        let value, orig_env = eval orig_env value in
+        let lam_env = env_def lam_env sym (fst value) in
+        loop args values lam_env orig_env
+    | (res, arg_loc) :: _, _ ->
+        raise @@ EvalError ("Expected symbol, got " ^ show_data res, arg_loc)
+  in
+
+  loop l.args passed_values (l.get_env env_) env_
+
+and eval_list (l : ast list) (lc : loc) (env : envt) : ast * envt =
   match l with
   | [] -> ((List [], lc), env)
   | unevaled_head :: tail -> (
@@ -261,10 +304,11 @@ and eval_list (l : ast list) (lc : loc) (env : Env.t) : ast * Env.t =
       | (Op o, _), env -> fold_op o tail lc env
       | (Pr p, _), env -> fold_pr p tail lc env
       | (Sf s, _), env -> handle_sf s tail lc env
+      | (Lambda l, _), env -> eval_lambda l tail lc env
       | _ -> raise @@ EvalError ("Head not callable", lc))
 
-and eval (env : Env.t) ((value, lc) : ast) : ast * Env.t =
+and eval (env : envt) ((value, lc) : ast) : ast * envt =
   match value with
-  | Symbol _ -> ((Env.get env (value, lc), lc), env)
+  | Symbol _ -> ((env_get env (value, lc), lc), env)
   | List l -> eval_list l lc env
   | _ -> ((value, lc), env)

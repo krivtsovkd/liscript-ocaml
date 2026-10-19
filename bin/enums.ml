@@ -21,6 +21,8 @@ type sf =
   | Do
   | Def
   | Set
+  | Lambda
+  | Dambda
 
 let sf_str_list =
   [
@@ -37,6 +39,8 @@ let sf_str_list =
     (Do, "do");
     (Def, "def");
     (Set, "set!");
+    (Lambda, "lambda");
+    (Dambda, "dambda");
   ]
 
 let sf_arg_count (s : sf) : int option =
@@ -48,6 +52,8 @@ let sf_arg_count (s : sf) : int option =
   | Cdr -> Some 1
   | Eval -> Some 1
   | Symbol -> Some 1
+  | Lambda -> Some 2
+  | Dambda -> Some 2
   | _ -> None
 
 exception Unreachable
