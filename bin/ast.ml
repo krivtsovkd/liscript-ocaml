@@ -9,7 +9,8 @@ end
 
 module StringMap = Map.Make (String)
 
-type loc = int * int
+(* (start, end, filename) *)
+type loc = int * int * string
 
 exception EvalError of (string * loc)
 
@@ -26,8 +27,8 @@ type ast_data =
   | Lambda of lambda
 
 and ast = ast_data * loc
-and lambda = { args : ast list; body : ast; get_env : envt -> envt }
 and envt = ast_data StringMap.t
+and lambda = { args : ast list; body : ast; get_env : envt -> envt }
 
 let env_def (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
   StringMap.add (Symbol.name sym) value env

@@ -1,22 +1,18 @@
 open Ast
 
-type stream = char list * int
-
-type 'a parse_result =
-  | Success of ('a * stream)
-  | Failure of (string * int * int)
-
+type stream = char list * int * string
+type 'a parse_result = Success of ('a * stream) | Failure of (string * loc)
 type 'a parser = stream -> 'a parse_result
 
 let predicate_parser (pred : char -> bool) : char parser =
- fun (st, loc) ->
+ fun (st, loc, fname) ->
   match st with
-  | [] -> Failure ("Empty stream", loc, loc + 1)
+  | [] -> Failure ("Empty stream", (loc, loc + 1, fname))
   | x :: xs ->
       if pred x then
-        Success (x, (xs, loc + 1))
+        Success (x, (xs, loc + 1, fname))
       else
-        Failure ("Predicate false", loc, loc + 1)
+        Failure ("Predicate false", (loc, loc + 1, fname))
 
 let anychar_parser = predicate_parser (fun _ -> true)
 let digits = "0123456789"
@@ -30,10 +26,12 @@ let charset_parser (charset : string) =
 let char_parser (c : char) = predicate_parser (fun c' -> c' == c)
 let return (x : 'a) : 'a parser = fun st -> Success (x, st)
 
-let error (msg : string) (loc_start : int) (loc_end : int) : 'a parser =
- fun st -> Failure (msg, loc_start, loc_end)
+let error (msg : string) (loc_start : int) (loc_end : int) (fname : string) :
+    'a parser =
+ fun st -> Failure (msg, (loc_start, loc_end, fname))
 
-let get_loc () : int parser = fun (st, loc) -> Success (loc, (st, loc))
+let get_loc () : (int * string) parser =
+ fun (st, loc, fname) -> Success ((loc, fname), (st, loc, fname))
 
 let bind (m : 'a parser) (f : 'a -> 'b parser) : 'b parser =
  fun st ->
@@ -111,7 +109,7 @@ let bool_parser () : bool parser =
      return false)
 
 let string_parser () : string parser =
-  let* initial_loc = get_loc () in
+  let* initial_loc, fname = get_loc () in
   let* _ = char_parser '"' in
 
   let rec loop (acc : string) : string parser =
@@ -121,7 +119,7 @@ let string_parser () : string parser =
     @@ alt
          (let* c = anychar_parser in
           loop (acc ^ String.make 1 c))
-         (error "Missing closing bracket" initial_loc (initial_loc + 1))
+         (error "Missing closing bracket" initial_loc (initial_loc + 1) fname)
   in
   loop ""
 
@@ -166,8 +164,9 @@ let val_parser (val_str_list : ('a * string) list) : 'a parser =
         let* _ = charset_parser delimiters in
         return x)
   in
+  (* TODO this dies if reached *)
   List.fold_right alt parser_list
-    (error "Expected keyword, didnt get one 💥" 0 0)
+    (error "Expected keyword, didnt get one 💥" 0 0 "")
 
 let rec list_parser () : ast list parser =
   let* _ = char_parser '(' in
@@ -183,21 +182,21 @@ let rec list_parser () : ast list parser =
   return @@ List.rev l
 
 and quote_parser () : ast parser =
-  let* init_loc = get_loc () in
+  let* init_loc, fname = get_loc () in
   let* _ = char_parser '\'' in
   let* term = ast_parser () in
-  let* final_loc = get_loc () in
+  let* final_loc, _ = get_loc () in
   return
-    ( List [ (Sf Enums.Quote, (init_loc, init_loc + 1)); term ],
-      (init_loc, final_loc) )
+    ( List [ (Sf Enums.Quote, (init_loc, init_loc + 1, fname)); term ],
+      (init_loc, final_loc, fname) )
 
 and ast_parser () : ast parser =
   let* _ = whitespace_parser () in
-  let* init_loc = get_loc () in
+  let* init_loc, fname = get_loc () in
 
   let ast_return (x : ast_data) : ast parser =
-    let* final_loc = get_loc () in
-    return (x, (init_loc, final_loc))
+    let* final_loc, _ = get_loc () in
+    return (x, (init_loc, final_loc, fname))
   in
 
   alt
@@ -228,19 +227,19 @@ and ast_parser () : ast parser =
   @@ alt
        (let* s = symbol_parser () in
         ast_return (Symbol s))
-       (error "What is this" init_loc (init_loc + 1))
+       (error "What is this" init_loc (init_loc + 1) fname)
 
 let count_chars (st : char list) (ch : char) : int =
   List.length @@ List.filter (fun c -> c = ch) st
 
 let check_paren_balance (st : char list) : bool = true
 
-let parse ((st, lc) : stream) : ast parse_result =
+let parse ((st, lc, fname) : stream) : ast parse_result =
   if count_chars st '"' mod 2 <> 0 then
-    Failure ("Unmatched quote", lc, lc + 1)
+    Failure ("Unmatched quote", (lc, lc + 1, fname))
   else if
     count_chars st '(' != count_chars st ')' || (not @@ check_paren_balance st)
   then
-    Failure ("Unmatched bracket", lc, lc + 1)
+    Failure ("Unmatched bracket", (lc, lc + 1, fname))
   else
-    ast_parser () (st, lc)
+    ast_parser () (st, lc, fname)

@@ -21,7 +21,7 @@ let offset_to_linenum (str : string) (offset : int) : int =
   List.length @@ List.filter (fun c -> c = '\n') @@ explod prefix
 
 let print_error_impl (program : string) (msg : string)
-    ((loc_start, loc_end) : loc) =
+    ((loc_start, loc_end, _) : loc) =
   let loc_end = loc_end - 1 in
 
   let start_linenum = offset_to_linenum program loc_start in
@@ -62,6 +62,7 @@ let print_error_impl (program : string) (msg : string)
     print_endline @@ tildes2 ^ "^";
     print_string "\x1b[39m"
 
-let print_error (program : string) (msg : string) ((loc_start, loc_end) : loc) =
-  print_error_impl program msg (loc_start, loc_end);
+let print_error (program : string) (msg : string)
+    ((loc_start, loc_end, fname) : loc) =
+  print_error_impl program msg (loc_start, loc_end, fname);
   flush stdout

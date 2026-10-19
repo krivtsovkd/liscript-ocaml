@@ -2,13 +2,17 @@ open Ast
 open Err
 
 type read_error = CantRead | UnknownCommand | FileNotFound
-type read_result = ReplStr of string | FileStr of string | Error of read_error
+
+type read_result =
+  | ReplStr of string
+  | FileStr of string * string
+  | Error of read_error
 
 let is_file (res : read_result) : bool =
   match res with FileStr _ -> true | _ -> false
 
 let read_file (filename : string) : read_result =
-  try FileStr (In_channel.with_open_text filename In_channel.input_all)
+  try FileStr (In_channel.with_open_text filename In_channel.input_all, filename)
   with Sys_error _ -> Error FileNotFound
 
 let read () : read_result =
@@ -29,12 +33,13 @@ let cond_print_endline (cond : bool) (str : string) =
   else
     ()
 
-let rec process (orig_program : string) ((st, lc) : Parser.stream)
-    (is_file : bool) (env : envt) : envt =
-  match Parser.parse (st, lc) with
-  | Failure (msg, loc_start, loc_end) ->
-      print_error orig_program msg (loc_start, loc_end);
-      env
+let rec process ((st, lc, fname) : Parser.stream) (is_file : bool) (env : envt)
+    (hist : string StringMap.t) : envt * string StringMap.t =
+  match Parser.parse (st, lc, fname) with
+  | Failure (msg, (loc_start, loc_end, fname)) ->
+      let orig_program = StringMap.find fname hist in
+      print_error orig_program msg (loc_start, loc_end, fname);
+      (env, hist)
   | Success (value, rest_stream) -> (
       let env, out =
         try
@@ -42,19 +47,20 @@ let rec process (orig_program : string) ((st, lc) : Parser.stream)
           let res_str = show_ast res in
           cond_print_endline (not is_file) res_str;
           (env, res_str)
-        with EvalError (msg, lc) ->
-          print_error orig_program msg lc;
+        with EvalError (msg, (loc_start, loc_end, fname)) ->
+          let orig_program = StringMap.find fname hist in
+          print_error orig_program msg (loc_start, loc_end, fname);
           (env, "")
       in
 
       match rest_stream with
-      | [], _ | [ '\n' ], _ ->
+      | [], _, _ | [ '\n' ], _, _ ->
           cond_print_endline (is_file && out <> "") out;
-          env
-      | st -> process orig_program st is_file env)
+          (env, hist)
+      | st -> process st is_file env hist)
 
-let rec main_loop (env : envt) : envt =
-  let env =
+let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
+  let env, hist =
     let read_res = read () in
     match read_res with
     | Error err ->
@@ -62,8 +68,8 @@ let rec main_loop (env : envt) : envt =
         | CantRead -> exit 0
         | UnknownCommand -> print_endline "Unknown command"
         | FileNotFound -> print_endline "File not found");
-        env
-    | ReplStr res | FileStr res ->
+        (env, hist)
+    | ReplStr res ->
         LNoise.history_add res |> ignore;
         let _ =
           match
@@ -72,22 +78,44 @@ let rec main_loop (env : envt) : envt =
           | Ok _ -> ()
           | Error msg -> print_endline msg
         in
-        process res (explod res, 0) (is_file read_res) env
+        let fname = "repl" ^ string_of_int @@ Random.int 1000000000 in
+        let hist = StringMap.add fname res hist in
+        process (explod res, 0, fname) false env hist
+    | FileStr (res, fname) ->
+        let hist = StringMap.add fname res hist in
+        process (explod res, 0, fname) true env hist
+    (* | ReplStr res | FileStr res -> *)
+    (*     LNoise.history_add res |> ignore; *)
+    (*     let _ = *)
+    (*       match *)
+    (*         LNoise.history_save ~filename:"/home/yuli/temp/lisphist.txt" *)
+    (*       with *)
+    (*       | Ok _ -> () *)
+    (*       | Error msg -> print_endline msg *)
+    (*     in *)
+    (*     process res (explod res, 0) (is_file read_res) env *)
   in
 
-  main_loop env
+  main_loop env hist
 
 let () =
-  let stdlib_str =
+  let stdlib_str, stdlib_fname =
     match read_file "stdlib/lib.ls" with
-    | FileStr s | ReplStr s -> s
+    | FileStr (s, fname) -> (s, fname)
+    | ReplStr _ ->
+        print_endline "Unreachable";
+        exit 0
     | Error _ ->
         print_endline "Stdlib file not found";
         exit 0
   in
 
-  let env = process stdlib_str (explod stdlib_str, 0) true StringMap.empty in
+  let hist = StringMap.add stdlib_fname stdlib_str StringMap.empty in
+
+  let env, hist =
+    process (explod stdlib_str, 0, stdlib_fname) true StringMap.empty hist
+  in
   LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 
-  main_loop env |> ignore
+  main_loop env hist |> ignore

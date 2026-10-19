@@ -205,8 +205,8 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       match In_channel.input_line stdin with
       | None -> ((List [], lc), env)
       | Some line -> (
-          match Parser.parse (explod line, 0) with
-          | Failure (reason, _, _) ->
+          match Parser.parse (explod line, 0, "") with
+          | Failure (reason, _) ->
               raise @@ EvalError ("Input parse error:\n" ^ reason, lc)
           | Success (value, _) -> (value, env)))
   | Symbol ->
