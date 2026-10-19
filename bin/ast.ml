@@ -1,11 +1,11 @@
 open Enums
 
-type symbol = string
+module Symbol = struct
+  type t = string
 
-let make_symbol (str : string) : symbol = "\x00" ^ str
-
-let symbol_name (symbol : symbol) : string =
-  String.sub symbol 1 (String.length symbol - 1)
+  let make (str : string) : t = "\x00" ^ str
+  let name (sym : t) : string = String.sub sym 1 (String.length sym - 1)
+end
 
 module StringMap = Map.Make (String)
 
@@ -19,7 +19,7 @@ type ast_data =
   | Bool of bool
   | Str of string
   | List of ast list
-  | Symbol of symbol
+  | Symbol of Symbol.t
   | Op of op
   | Pr of pr
   | Sf of sf
@@ -29,13 +29,13 @@ and ast = ast_data * loc
 and lambda = { args : ast list; body : ast; get_env : envt -> envt }
 and envt = ast_data StringMap.t
 
-let env_def (env : envt) (sym : symbol) (value : ast_data) : envt =
-  StringMap.add (symbol_name sym) value env
+let env_def (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
+  StringMap.add (Symbol.name sym) value env
 
 let env_get (env : envt) ((sym, lc) : ast) : ast_data =
   match sym with
   | Symbol s -> (
-      match StringMap.find_opt (symbol_name s) env with
+      match StringMap.find_opt (Symbol.name s) env with
       | Some x -> x
       | None ->
           if Settings.auto_quoting then
@@ -44,8 +44,8 @@ let env_get (env : envt) ((sym, lc) : ast) : ast_data =
             raise @@ EvalError ("Undefined variable", lc))
   | _ -> raise @@ EvalError ("Expected symbol", lc)
 
-let env_set (env : envt) (sym : symbol) (value : ast_data) : envt =
-  StringMap.add (symbol_name sym) value env
+let env_set (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
+  StringMap.add (Symbol.name sym) value env
 
 let make_lambda (args : ast list) (body : ast) (env : envt) : lambda =
   { args; body; get_env = (fun _ -> env) }
@@ -62,7 +62,7 @@ let rec show_data (value : ast_data) : string =
   | Float f -> Float.to_string f
   | Bool b -> ( match b with true -> "true" | false -> "false")
   | Str s -> "\"" ^ s ^ "\""
-  | Symbol s -> symbol_name s
+  | Symbol s -> Symbol.name s
   | Op o -> string_of_op o
   | Pr p -> string_of_pr p
   | Sf s -> string_of_sf s

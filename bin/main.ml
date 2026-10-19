@@ -1,12 +1,6 @@
 open Ast
 open Err
 
-let check_a (env : envt) =
-  Out_channel.output_string stderr
-  @@ string_of_bool
-  @@ StringMap.exists (fun s _ -> "a" = Ast.symbol_name s) env;
-  flush stderr
-
 type read_error = CantRead | UnknownCommand | FileNotFound
 type read_result = ReplStr of string | FileStr of string | Error of read_error
 
@@ -93,7 +87,6 @@ let () =
   in
 
   let env = process stdlib_str (explod stdlib_str, 0) true StringMap.empty in
-
   LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 

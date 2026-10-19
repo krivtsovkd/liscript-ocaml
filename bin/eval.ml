@@ -211,7 +211,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
           | Success (value, _) -> (value, env)))
   | Symbol ->
       let s, env = eval env @@ List.hd tail in
-      ((Symbol (s |> repr |> make_symbol), lc), env)
+      ((Symbol (s |> repr |> Symbol.make), lc), env)
   | Eval ->
       let x, env = eval env @@ List.hd tail in
       let x', env = eval env x in
@@ -266,8 +266,14 @@ and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     match (lambda_args, passed_values) with
     | [], [] -> (fst @@ eval lam_env l.body, orig_env)
     | lambda_args, [] ->
-        (* TODO BROKEN !!! *)
-        ( (Lambda { args = lambda_args; body = l.body; get_env = l.get_env }, lc),
+        (* TODO FIX DAMBDA *)
+        ( ( Lambda
+              {
+                args = lambda_args;
+                body = l.body;
+                get_env = (fun _ -> lam_env);
+              },
+            lc ),
           orig_env )
     | [], passed_values ->
         let rec eval_list_loop (acc : ast list) (vals : ast list) orig_env :
@@ -282,7 +288,7 @@ and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
           eval_list_loop [] passed_values orig_env
         in
         let lam_env =
-          env_def lam_env (make_symbol "rest-args")
+          env_def lam_env (Symbol.make "rest-args")
             (List (List.rev evaled_values))
         in
         (fst @@ eval lam_env l.body, orig_env)

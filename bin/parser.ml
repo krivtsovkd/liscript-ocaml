@@ -125,7 +125,7 @@ let string_parser () : string parser =
   in
   loop ""
 
-let symbol_parser () : symbol parser =
+let symbol_parser () : Symbol.t parser =
   let* first = charset_parser first_in_symbol in
 
   let rec loop (acc : string) : string parser =
@@ -137,7 +137,7 @@ let symbol_parser () : symbol parser =
           loop (acc ^ String.make 1 c))
          (return acc)
   in
-  loop @@ "\x00" ^ String.make 1 first
+  loop @@ Symbol.make @@ String.make 1 first
 
 let float_parser () : float parser =
   let rec loop1 (acc : string) : string parser =
@@ -163,6 +163,7 @@ let val_parser (val_str_list : ('a * string) list) : 'a parser =
     val_str_list
     |> List.map (fun (x, str) ->
         let* _ = str_parser str in
+        let* _ = charset_parser delimiters in
         return x)
   in
   List.fold_right alt parser_list
