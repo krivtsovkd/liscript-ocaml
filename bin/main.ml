@@ -98,6 +98,22 @@ let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
 
   main_loop env hist
 
+(* TODO *)
+let count_chars (s : string) (ch : char) : int =
+  s |> explod |> List.filter (fun c -> c = ch) |> List.length
+
+let setup_lnoise () =
+  LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
+  LNoise.history_set ~max_length:100 |> ignore;
+  LNoise.set_completion_callback (fun line completions ->
+      let bopen = count_chars line '(' in
+      let bose = count_chars line ')' in
+      if bose >= bopen then
+        ()
+      else
+        LNoise.add_completion completions
+          (line ^ String.init (bopen - bose) (fun _ -> ')')))
+
 let () =
   let stdlib_str, stdlib_fname =
     match read_file "stdlib/lib.ls" with
@@ -115,7 +131,7 @@ let () =
   let env, hist =
     process (explod stdlib_str, 0, stdlib_fname) true StringMap.empty hist
   in
-  LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
-  LNoise.history_set ~max_length:100 |> ignore;
+
+  setup_lnoise ();
 
   main_loop env hist |> ignore

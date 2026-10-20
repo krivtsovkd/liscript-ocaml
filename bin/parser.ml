@@ -232,7 +232,7 @@ and ast_parser () : ast parser =
 let count_chars (st : char list) (ch : char) : int =
   List.length @@ List.filter (fun c -> c = ch) st
 
-let check_paren_balance (st : char list) : bool = true
+let check_paren_balance (st : char list) : bool = true (* TODO *)
 
 let parse ((st, lc, fname) : stream) : ast parse_result =
   if count_chars st '"' mod 2 <> 0 then
