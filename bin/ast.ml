@@ -25,14 +25,17 @@ type ast_data =
   | Pr of pr
   | Sf of sf
   | Lambda of lambda
+  | Macro of macro
 
 and ast = ast_data * loc
 and envt = ast_data StringMap.t
 and lambda = { args : ast list; body : ast; get_env : envt -> envt }
+and macro = { args : ast list; body : ast }
 
 let env_def (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
   StringMap.add (Symbol.name sym) value env
 
+(* TODO make work w symbol *)
 let env_get (env : envt) ((sym, lc) : ast) : ast_data =
   match sym with
   | Symbol s -> (
@@ -80,7 +83,12 @@ let rec show_data (value : ast_data) : string =
       in
       "(" ^ aux "" l ^ ")"
   | Lambda l ->
-      "(Lambda or Dambda) " ^ show_data (List l.args) ^ " " ^ show_ast l.body
+      (if is_dambda l then
+         "(dambda "
+       else
+         "(lambda ")
+      ^ show_data (List l.args) ^ " " ^ show_ast l.body ^ ")"
+  | Macro m -> "(macro " ^ show_data (List m.args) ^ " " ^ show_ast m.body ^ ")"
 
 and show_ast ((value, _) : ast) : string = show_data value
 
@@ -96,6 +104,7 @@ let show_type ((value, _) : ast) : string =
   | Pr _ -> "pr"
   | Sf _ -> "sf"
   | Lambda _ -> "lambda"
+  | Macro _ -> "macro"
 
 let print_env (env : envt) =
   StringMap.bindings env

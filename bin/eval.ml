@@ -50,7 +50,7 @@ let pr_num (p : Enums.pr) (x : 'a) (y : 'a) : bool =
 
 let pr_funs (p : Enums.pr) (a : ast) (b : ast) (lc : loc) : bool =
   match p with
-  | Eq -> a = b
+  | Eq -> fst a = fst b
   | Gt | Lt | Gte | Lte -> (
       match (a, b) with
       | (Int x, _), (Int y, _) -> pr_num p x y
@@ -134,7 +134,10 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       match arg with
       | List l, lc2 -> (
           match l with
-          | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
+          | [] ->
+              raise
+              @@ EvalError
+                   ("Expected nonempty list, got " ^ show_data (List l), lc2)
           | (x, _) :: _ -> ((x, lc), env))
       | res, lc2 ->
           if Settings.implicit_list_interface then
@@ -147,7 +150,10 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       match arg with
       | List l, lc2 -> (
           match l with
-          | [] -> raise @@ EvalError ("Expected nonempty list", lc2)
+          | [] ->
+              raise
+              @@ EvalError
+                   ("Expected nonempty list, got " ^ show_data (List l), lc2)
           | (_, _) :: xs -> ((List xs, lc), env))
       | res, lc2 ->
           if Settings.implicit_list_interface then
@@ -187,6 +193,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
             loop (repr x :: acc) xs env
       in
       let reprs, env = loop [] tail env in
+      let reprs = List.rev reprs in
       print_endline @@ String.concat " " reprs;
       ((List [], lc), env)
   | Read -> (
@@ -200,6 +207,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
             loop (repr x :: acc) xs env
       in
       let reprs, env = loop [] tail env in
+      let reprs = List.rev reprs in
       print_endline @@ String.concat " " reprs;
 
       match In_channel.input_line stdin with
@@ -257,48 +265,83 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       match args with
       | List args, _ -> ((Lambda (make_f args body env), lc), env)
       | _, loc_args ->
-          raise @@ EvalError ("Expected cons list, got " ^ repr args, loc_args))
+          raise
+          @@ EvalError ("Expected cons list, got " ^ show_ast args, loc_args))
+  | Macro -> (
+      let args, body = (List.hd tail, List.nth tail 1) in
+      match args with
+      | List args, _ -> ((Macro { args; body }, lc), env)
+      | _, loc_args ->
+          raise
+          @@ EvalError ("Expected cons list, got " ^ show_ast args, loc_args))
 
 and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     : ast * envt =
+  let make_f =
+    if is_dambda l then
+      make_dambda
+    else
+      make_lambda
+  in
+
   let rec loop (lambda_args : ast list) (passed_values : ast list)
-      (lam_env : envt) (orig_env : envt) : ast * envt =
+      (lam_env : envt) (outside_env : envt) : ast * envt =
     match (lambda_args, passed_values) with
-    | [], [] -> (fst @@ eval lam_env l.body, orig_env)
-    | lambda_args, [] ->
-        let make_f =
-          if is_dambda l then
-            make_dambda
-          else
-            make_lambda
-        in
-        ((Lambda (make_f lambda_args l.body lam_env), lc), orig_env)
     | [], passed_values ->
-        let rec eval_list_loop (acc : ast list) (vals : ast list) orig_env :
-            ast list * envt =
-          match vals with
-          | [] -> (acc, orig_env)
-          | v :: vs ->
-              let v, orig_env = eval orig_env v in
-              (v :: acc, orig_env)
-        in
-        let evaled_values, orig_env =
-          eval_list_loop [] passed_values orig_env
+        let outside_env, evaled_values =
+          List.fold_left_map
+            (fun acc_env val_elem ->
+              eval acc_env val_elem |> fun (a, b) -> (b, a))
+            outside_env passed_values
         in
         let lam_env =
-          env_def lam_env (Symbol.make "rest-args")
-            (List (List.rev evaled_values))
+          env_def lam_env (Symbol.make "rest-args") (List evaled_values)
         in
-        (fst @@ eval lam_env l.body, orig_env)
+        (fst @@ eval lam_env l.body, outside_env)
+    | lambda_args, [] ->
+        ((Lambda (make_f lambda_args l.body lam_env), lc), outside_env)
     | (Symbol sym, _) :: args, value :: values ->
-        let value, orig_env = eval orig_env value in
+        let value, outside_env = eval outside_env value in
         let lam_env = env_def lam_env sym (fst value) in
-        loop args values lam_env orig_env
+        loop args values lam_env outside_env
     | (res, arg_loc) :: _, _ ->
         raise @@ EvalError ("Expected symbol, got " ^ show_data res, arg_loc)
   in
 
   loop l.args passed_values (l.get_env env_) env_
+
+and macroexpand (env : envt) ((value, lc) : ast) : ast =
+  match value with
+  | Symbol s -> (
+      try (env_get env (value, lc), lc) with EvalError _ -> (value, lc))
+  | List l -> (
+      match l with
+      | [] -> (List [], lc)
+      | x :: xs -> (
+          let mx = macroexpand env x in
+          match macroexpand env (List xs, lc) with
+          | List mxs, _ -> (List (mx :: mxs), lc)
+          | _ -> raise Unreachable))
+  | _ -> (value, lc)
+
+and eval_macro (m : macro) (passed_values : ast list) (lc : loc)
+    (outside_env : envt) : ast * envt =
+  let rec loop (macro_args : ast list) (passed_values : ast list) (env : envt) :
+      ast * envt =
+    match (macro_args, passed_values) with
+    | [], passed_values ->
+        let env = env_def env (Symbol.make "rest-args") (List passed_values) in
+        eval outside_env @@ macroexpand env m.body
+    | macro_args, [] ->
+        ( (Macro { args = macro_args; body = macroexpand env m.body }, lc),
+          outside_env )
+    | (Symbol sym, _) :: args, value :: values ->
+        let env = env_def env sym (fst value) in
+        loop args values env
+    | (res, arg_loc) :: _, _ ->
+        raise @@ EvalError ("Expected symbol, got " ^ show_data res, arg_loc)
+  in
+  loop m.args passed_values StringMap.empty
 
 and eval_list (l : ast list) (lc : loc) (env : envt) : ast * envt =
   match l with
@@ -309,7 +352,9 @@ and eval_list (l : ast list) (lc : loc) (env : envt) : ast * envt =
       | (Pr p, _), env -> fold_pr p tail lc env
       | (Sf s, _), env -> handle_sf s tail lc env
       | (Lambda l, _), env -> eval_lambda l tail lc env
-      | _ -> raise @@ EvalError ("Head not callable", lc))
+      | (Macro m, _), env -> eval_macro m tail lc env
+      | head, _ ->
+          raise @@ EvalError ("Head not callable: " ^ show_data (List l), lc))
 
 and eval (env : envt) ((value, lc) : ast) : ast * envt =
   match value with

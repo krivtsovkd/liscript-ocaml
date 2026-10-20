@@ -161,11 +161,11 @@ let val_parser (val_str_list : ('a * string) list) : 'a parser =
     val_str_list
     |> List.map (fun (x, str) ->
         let* _ = str_parser str in
-        let* _ = charset_parser delimiters in
+        let* _ = peek @@ charset_parser delimiters in
         return x)
   in
-  (* TODO this dies if reached *)
   List.fold_right alt parser_list
+    (* TODO this dies if reached *)
     (error "Expected keyword, didnt get one 💥" 0 0 "")
 
 let rec list_parser () : ast list parser =
@@ -227,7 +227,7 @@ and ast_parser () : ast parser =
   @@ alt
        (let* s = symbol_parser () in
         ast_return (Symbol s))
-       (error "What is this" init_loc (init_loc + 1) fname)
+       (error "Cant parse this" init_loc (init_loc + 1) fname)
 
 let count_chars (st : char list) (ch : char) : int =
   List.length @@ List.filter (fun c -> c = ch) st
