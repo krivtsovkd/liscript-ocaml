@@ -13,6 +13,7 @@ depends: [
   "dune" {>= "3.24"}
   "ocaml"
   "odoc" {with-doc}
+  "linenoise"
 ]
 build: [
   ["dune" "subst"] {dev}

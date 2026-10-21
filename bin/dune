@@ -1,4 +1,4 @@
 (executable
- (public_name yulisp)
+ (public_name liscript)
  (name main)
  (libraries linenoise unix))

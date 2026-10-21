@@ -1,11 +1,11 @@
 (lang dune 3.24)
 
-(name yulisp)
+(name liscript)
 
 (generate_opam_files true)
 
 (package
- (name yulisp)
+ (name liscript)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends ocaml)
