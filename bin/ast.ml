@@ -11,8 +11,9 @@ module StringMap = Map.Make (String)
 
 (* (start, end, filename) *)
 type loc = int * int * string
+type tracet = loc list
 
-exception EvalError of (string * loc)
+exception EvalError of (string * loc * tracet)
 
 type ast_data =
   | Int of int
@@ -36,7 +37,7 @@ let env_def (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
   StringMap.add (Symbol.name sym) value env
 
 (* TODO make work w symbol *)
-let env_get (env : envt) ((sym, lc) : ast) : ast_data =
+let env_get (env : envt) (trace : tracet) ((sym, lc) : ast) : ast_data =
   match sym with
   | Symbol s -> (
       match StringMap.find_opt (Symbol.name s) env with
@@ -45,8 +46,8 @@ let env_get (env : envt) ((sym, lc) : ast) : ast_data =
           if Settings.auto_quoting then
             sym
           else
-            raise @@ EvalError ("Undefined variable", lc))
-  | _ -> raise @@ EvalError ("Expected symbol", lc)
+            raise @@ EvalError ("Undefined variable", lc, trace))
+  | _ -> raise @@ EvalError ("Expected symbol", lc, trace)
 
 let env_set (env : envt) (sym : Symbol.t) (value : ast_data) : envt =
   StringMap.add (Symbol.name sym) value env

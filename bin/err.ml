@@ -19,8 +19,7 @@ let offset_to_linenum (str : string) (offset : int) : int =
   let prefix = String.sub str 0 offset in
   List.length @@ List.filter (fun c -> c = '\n') @@ explod prefix
 
-let print_error_impl (program : string) (msg : string)
-    ((loc_start, loc_end, _) : loc) =
+let print_loc (program : string) ((loc_start, loc_end, fname) : loc) =
   let loc_end = loc_end - 1 in
 
   let start_linenum = offset_to_linenum program loc_start in
@@ -29,12 +28,8 @@ let print_error_impl (program : string) (msg : string)
   let start_column = loc_start - start_line_offset - 1 in
   let start_str = String.init start_column (fun _ -> ' ') in
 
-  print_endline @@ "\x1b[31mError\x1b[39m on line "
-  ^ string_of_int (start_linenum + 1)
-  ^ ":";
-  print_endline msg;
+  print_endline @@ fname ^ ":" ^ string_of_int (start_linenum + 1);
   print_endline start_line;
-
   print_string "\x1b[31m";
 
   let end_linenum = offset_to_linenum program loc_end in
@@ -61,7 +56,21 @@ let print_error_impl (program : string) (msg : string)
     print_endline @@ tildes2 ^ "^";
     print_string "\x1b[39m"
 
-let print_error (program : string) (msg : string)
-    ((loc_start, loc_end, fname) : loc) =
-  print_error_impl program msg (loc_start, loc_end, fname);
+let print_error_impl (hist : string StringMap.t) (msg : string)
+    ((loc_start, loc_end, fname) : loc) (trace : tracet) =
+  print_endline @@ "\x1b[31mError\x1b[39m:";
+  print_endline msg;
+  print_loc (StringMap.find fname hist) (loc_start, loc_end, fname);
+
+  if List.length trace > 1 then
+    let _ = print_endline "\x1b[36mTrace:\x1b[39m" in
+    List.iter (fun (loc_start, loc_end, fname) ->
+        print_loc (StringMap.find fname hist) (loc_start, loc_end, fname))
+    @@ List.rev trace
+  else
+    ()
+
+let print_error (hist : string StringMap.t) (msg : string) (lc : loc)
+    (trace : tracet) =
+  print_error_impl hist msg lc trace;
   flush stdout

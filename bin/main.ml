@@ -18,7 +18,6 @@ let read_file (filename : string) : read_result =
 
 let read () : read_result =
   match LNoise.linenoise ">>> " with
-  (* match In_channel.input_line stdin with *)
   | None -> Error CantRead
   | Some line -> (
       if line.[0] <> ':' then
@@ -39,20 +38,18 @@ exception Unreachable
 let rec process ((st, lc, fname) : Parser.stream) (is_file : bool) (env : envt)
     (hist : string StringMap.t) : envt * string StringMap.t =
   match Parser.parse (st, lc, fname) with
-  | Failure (msg, (loc_start, loc_end, fname)) ->
-      let orig_program = StringMap.find fname hist in
-      print_error orig_program msg (loc_start, loc_end, fname);
+  | Failure (msg, lc) ->
+      print_error hist msg lc [];
       (env, hist)
   | Success (value, rest_stream) -> (
       let env, out =
         try
-          let res, env = Eval.eval env value in
+          let res, env = Eval.eval env [] value in
           let res_str = show_ast res in
           cond_print_endline (not is_file) res_str;
           (env, res_str)
-        with EvalError (msg, (loc_start, loc_end, fname)) ->
-          let orig_program = StringMap.find fname hist in
-          print_error orig_program msg (loc_start, loc_end, fname);
+        with EvalError (msg, lc, trace) ->
+          print_error hist msg lc trace;
           (env, "")
       in
 
