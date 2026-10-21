@@ -72,14 +72,11 @@ let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
         (env, hist)
     | ReplStr res ->
         LNoise.history_add res |> ignore;
-        LNoise.history_save ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
-
         let fname = "repl" ^ string_of_int @@ Random.int 1000000000 in
         let hist = StringMap.add fname res hist in
         process (explod res, 0, fname) false env hist
     | FileStr (res, fname) ->
         LNoise.history_add (":l " ^ fname) |> ignore;
-        LNoise.history_save ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
 
         let hist = StringMap.add fname res hist in
         process (explod res, 0, fname) true env hist
@@ -88,7 +85,6 @@ let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
   main_loop env hist
 
 let setup_lnoise () =
-  LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
   LNoise.history_set ~max_length:1000 |> ignore;
   LNoise.set_completion_callback (fun line completions ->
       let bopen = count_chars_str line '(' in
