@@ -1,5 +1,6 @@
 open Ast
 open Err
+open Util
 
 type read_error = CantRead | UnknownCommand | FileNotFound
 
@@ -89,16 +90,12 @@ let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
 
   main_loop env hist
 
-(* TODO *)
-let count_chars (s : string) (ch : char) : int =
-  s |> explod |> List.filter (fun c -> c = ch) |> List.length
-
 let setup_lnoise () =
   LNoise.history_load ~filename:"/home/yuli/temp/lisphist.txt" |> ignore;
   LNoise.history_set ~max_length:1000 |> ignore;
   LNoise.set_completion_callback (fun line completions ->
-      let bopen = count_chars line '(' in
-      let bose = count_chars line ')' in
+      let bopen = count_chars_str line '(' in
+      let bose = count_chars_str line ')' in
       if bose >= bopen then
         ()
       else

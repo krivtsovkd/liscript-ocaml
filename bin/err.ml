@@ -1,6 +1,5 @@
 open Ast
-
-let explod str = List.init (String.length str) (String.get str)
+open Util
 
 let rec pre_nth_line_start (str : string) (n : int) : int =
   if n = 0 then

@@ -1,9 +1,5 @@
 open Ast
-
-(* TODO *)
-let explod str = List.init (String.length str) (String.get str)
-
-exception Unreachable
+open Util
 
 let repr (v : ast_data) : string = match v with Str s -> s | _ -> show_data v
 let repr ((v, _) : ast) : string = repr v
@@ -280,6 +276,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
   | Panic ->
       let error_msg, env = eval env @@ List.hd tail in
       raise @@ EvalError ("Panic: " ^ show_ast error_msg, lc)
+  | Python -> ((Bool false, lc), env)
 
 and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     : ast * envt =
@@ -305,7 +302,10 @@ and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
         in
         (fst @@ eval lam_env l.body, outside_env)
     | lambda_args, [] ->
-        ((Lambda (make_f lambda_args l.body lam_env), lc), outside_env)
+        if is_dambda l then
+          raise @@ EvalError ("Partial dambda not allowed", lc)
+        else
+          ((Lambda (make_f lambda_args l.body lam_env), lc), outside_env)
     | (Symbol sym, _) :: args, value :: values ->
         let value, outside_env = eval outside_env value in
         let lam_env = env_def lam_env sym (fst value) in

@@ -1,4 +1,5 @@
 open Ast
+open Util
 
 type stream = char list * int * string
 type 'a parse_result = Success of ('a * stream) | Failure of (string * loc)
@@ -235,9 +236,6 @@ and ast_parser () : ast parser =
        (let* s = symbol_parser () in
         ast_return (Symbol s))
        (error "Cant parse this" init_loc (init_loc + 1) fname)
-
-let count_chars (st : char list) (ch : char) : int =
-  List.length @@ List.filter (fun c -> c = ch) st
 
 let check_paren_balance (st : char list) : bool = true (* TODO *)
 
