@@ -144,6 +144,7 @@ let symbol_parser () : Symbol.t parser =
   loop @@ Symbol.make @@ String.make 1 first
 
 let float_parser () : float parser =
+  let* _ = peek @@ charset_parser digits in
   let rec loop1 (acc : string) : string parser =
     alt
       (let* _ = char_parser '.' in
