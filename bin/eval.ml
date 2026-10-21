@@ -50,7 +50,10 @@ let pr_num (p : Enums.pr) (x : 'a) (y : 'a) : bool =
 
 let pr_funs (p : Enums.pr) (a : ast) (b : ast) (lc : loc) : bool =
   match p with
-  | Eq -> fst a = fst b
+  | Eq -> (
+      match (a, b) with
+      | (List al, _), (List bl, _) -> lists_eq al bl
+      | _, _ -> fst a = fst b)
   | Gt | Lt | Gte | Lte -> (
       match (a, b) with
       | (Int x, _), (Int y, _) -> pr_num p x y
@@ -274,7 +277,9 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       | _, loc_args ->
           raise
           @@ EvalError ("Expected cons list, got " ^ show_ast args, loc_args))
-  | Panic -> raise @@ EvalError ("Panic: " ^ show_ast @@ List.hd tail, lc)
+  | Panic ->
+      let error_msg, env = eval env @@ List.hd tail in
+      raise @@ EvalError ("Panic: " ^ show_ast error_msg, lc)
 
 and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     : ast * envt =

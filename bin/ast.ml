@@ -110,3 +110,9 @@ let print_env (env : envt) =
   StringMap.bindings env
   |> List.iter (fun (name, value) ->
       print_endline @@ name ^ ": " ^ show_data value)
+
+let rec lists_eq (a : ast list) (b : ast list) : bool =
+  match (a, b) with
+  | [], [] -> true
+  | _, [] | [], _ -> false
+  | x :: xs, y :: ys -> fst x = fst y && lists_eq xs ys
