@@ -26,6 +26,7 @@ type sf =
   | Macro
   | Panic
   | Python
+  | CurTime
 
 let sf_str_list =
   [
@@ -47,6 +48,7 @@ let sf_str_list =
     (Macro, "macro");
     (Panic, "panic");
     (Python, "python?");
+    (CurTime, "current-time");
   ]
 
 let sf_arg_count (s : sf) : int option =
@@ -63,6 +65,7 @@ let sf_arg_count (s : sf) : int option =
   | Macro -> Some 2
   | Panic -> Some 1
   | Python -> Some 0
+  | CurTime -> Some 0
   | _ -> None
 
 exception Unreachable

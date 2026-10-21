@@ -42,6 +42,19 @@
 ))))))
 (defmacro defnrec (name args) (eval (defnrec-core 'name (cons 'name 'args) (fix-recursive-body 'name 'rest-args true))))
 
+(defn min (a b) (cond (< a b) a b))
+(defn max (a b) (cond (> a b) a b))
+
+(def benchmark (dambda (label f)
+  (do
+    (def benchmark-start-time (current-time))
+    (eval f)
+    (def time-taken-s (- (current-time) benchmark-start-time))
+    (def time-taken-real (cond (>= time-taken-s 1.0) time-taken-s (* time-taken-s 1000.0)))
+    (def time-taken-unit (cond (>= time-taken-s 1.0) "s" "ms"))
+    (print "Benchmark" label "took" time-taken-real time-taken-unit)
+)))
+
 (defnrec range (from to) (cond (> from to) nil (cons from (range (+ 1 from) to))))
 
 (defnrec take (l cnt)
@@ -83,6 +96,8 @@
     (cons (f (car l)) (map f (cdr l)))
 ))
 
+(defn init (length func) (map func (range 0 (- length 1))))
+
 (defnrec filter (f l)
   (cond
     (nil? l) nil
@@ -98,3 +113,25 @@
     (nil? l) acc
     (fold-left f (f acc (car l)) (cdr l))
 ))
+
+(def rev (fold-left (lambda (acc x) (cons x acc)) nil))
+
+(defnrec merge (a b)
+  (cond
+    (nil? a) b
+    (nil? b) a
+    (< (car a) (car b)) (cons (car a) (merge (cdr a) b))
+    (cons (car b) (merge a (cdr b)))
+))
+
+(defnrec merge-sort (l)
+  (cond
+    (nil? l) nil
+    (nil? (cdr l)) l
+    (do
+      (def
+        half-len (/ (length l) 2)
+        lh (take l half-len)
+        rh (drop l half-len))
+      (merge (merge-sort lh) (merge-sort rh))
+)))

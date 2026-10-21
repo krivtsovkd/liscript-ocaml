@@ -296,6 +296,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt)
       let error_msg, env = eval env trace @@ List.hd tail in
       raise @@ EvalError ("Panic: " ^ show_ast error_msg, lc, trace)
   | Python -> ((Bool false, lc), env)
+  | CurTime -> ((Float (Unix.gettimeofday ()), lc), env)
 
 and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     (trace : tracet) : ast * envt =

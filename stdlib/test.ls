@@ -9,7 +9,7 @@
 (test '(1 2) (take (range 1 10) 2))
 (test nil (take nil 1))
 (test '("vasya" "petya" 1) (take '("vasya" "petya" 1 2 3) 3))
-(test '(5 6 7 8 9) (take (range 5 9) 100))
+(test (range 5 9) (take (range 5 9) 100))
 
 (test 0 (length nil))
 (test 3 (length (range 1 3)))
@@ -28,6 +28,10 @@
 (test '(1 1 2 3 5 8 13 21 34 55) (map fib (range 1 10)))
 (test '(true false true) (map not '(false true false)))
 
+(test '(1 2 3) (init 3 (lambda (n) (+ n 1))))
+(test nil (init 0 (lambda (n) n)))
+(test '(0 1 1 2 3 5 8 13 21 34) (init 10 fib))
+
 (test '(2 4) (filter (lambda (n) (= 0 (% n 2))) (range 1 5)))
 (test nil (filter (lambda (n) (< n 0)) (range 100 200)))
 (test '("vasya" "vasya") (filter (lambda (s) (= "vasya" s)) '("vasya" "pesya" "petya" "vasya")))
@@ -37,3 +41,6 @@
 (test true (fold-left and true
   (map (lambda (n) (= 0 (% n 2))) (map (lambda (n) (* n 2)) (range 1 10)))
 ))
+
+(test '(3 2 1) (rev (range 1 3)))
+(test nil (rev nil))
