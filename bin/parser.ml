@@ -4,6 +4,12 @@ type stream = char list * int * string
 type 'a parse_result = Success of ('a * stream) | Failure of (string * loc)
 type 'a parser = stream -> 'a parse_result
 
+let eof_parser () : unit parser =
+ fun (st, loc, fname) ->
+  match st with
+  | [] -> Success ((), ([], loc, fname))
+  | _ :: _ -> Failure ("Expected EOF", (loc, loc + 1, fname))
+
 let predicate_parser (pred : char -> bool) : char parser =
  fun (st, loc, fname) ->
   match st with
@@ -243,3 +249,11 @@ let parse ((st, lc, fname) : stream) : ast parse_result =
     Failure ("Unmatched bracket", (lc, lc + 1, fname))
   else
     ast_parser () (st, lc, fname)
+
+let is_whitespace_only () : bool parser =
+  peek
+    (let* _ = whitespace_parser () in
+     alt
+       (let* _ = eof_parser () in
+        return true)
+       (return false))

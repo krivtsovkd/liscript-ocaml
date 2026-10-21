@@ -33,6 +33,8 @@ let cond_print_endline (cond : bool) (str : string) =
   else
     ()
 
+exception Unreachable
+
 let rec process ((st, lc, fname) : Parser.stream) (is_file : bool) (env : envt)
     (hist : string StringMap.t) : envt * string StringMap.t =
   match Parser.parse (st, lc, fname) with
@@ -53,11 +55,12 @@ let rec process ((st, lc, fname) : Parser.stream) (is_file : bool) (env : envt)
           (env, "")
       in
 
-      match rest_stream with
-      | [], _, _ | [ '\n' ], _, _ ->
+      match Parser.is_whitespace_only () rest_stream with
+      | Failure _ -> raise Unreachable
+      | Success (true, _) ->
           cond_print_endline (is_file && out <> "") out;
           (env, hist)
-      | st -> process st is_file env hist)
+      | Success (false, st) -> process st is_file env hist)
 
 let rec main_loop (env : envt) (hist : string StringMap.t) : envt =
   let env, hist =
