@@ -24,6 +24,7 @@ type sf =
   | Lambda
   | Dambda
   | Macro
+  | Panic
 
 let sf_str_list =
   [
@@ -43,6 +44,7 @@ let sf_str_list =
     (Lambda, "lambda");
     (Dambda, "dambda");
     (Macro, "macro");
+    (Panic, "panic");
   ]
 
 let sf_arg_count (s : sf) : int option =
@@ -57,6 +59,7 @@ let sf_arg_count (s : sf) : int option =
   | Lambda -> Some 2
   | Dambda -> Some 2
   | Macro -> Some 2
+  | Panic -> Some 1
   | _ -> None
 
 exception Unreachable

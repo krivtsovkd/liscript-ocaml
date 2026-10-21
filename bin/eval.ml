@@ -274,6 +274,7 @@ and handle_sf (s : Enums.sf) (tail : ast list) (lc : loc) (env : envt) :
       | _, loc_args ->
           raise
           @@ EvalError ("Expected cons list, got " ^ show_ast args, loc_args))
+  | Panic -> raise @@ EvalError ("Panic: " ^ show_ast @@ List.hd tail, lc)
 
 and eval_lambda (l : lambda) (passed_values : ast list) (lc : loc) (env_ : envt)
     : ast * envt =
